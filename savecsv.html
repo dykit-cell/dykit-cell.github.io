@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ラップタイム入力フォーム</title>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 1em; font-size: 16px; }
+    label { display: block; margin-top: 1em; font-weight: bold; }
+    input, select, button {
+      width: 100%; padding: 0.5em; margin-top: 0.3em;
+      font-size: 1rem; box-sizing: border-box;
+    }
+    .swimmer-block {
+      border: 1px solid #aaa; padding: 1em; margin-top: 1em;
+      border-radius: 6px; background-color: #f9f9f9;
+    }
+    .lap-input-group { margin-top: 1em; }
+    .formatted-time {
+      display: block; margin-top: 0.2em;
+      color: gray; font-size: 0.9em;
+    }
+    .button-row {
+      margin-top: 1em; display: flex; gap: 0.5em;
+    }
+    .deleteSwimmer {
+      margin-top: 1em; background-color: #f44336; color: white;
+    }
+  </style>
+</head>
+<body>
+  <h2>ラップタイム入力フォーム（CSVダウンロード版）</h2>
+  <form id="lapForm">
+    <label>大会名:<input type="text" id="eventName"></label>
+    <label>水路:
+      <select id="courseType">
+        <option value="1">長水路</option><option value="2">短水路</option>
+      </select>
+    </label>
+    <label>性別:
+      <select id="gender">
+        <option value="1">男子</option><option value="2">女子</option><option value="3">混合</option>
+      </select>
+    </label>
+    <label>種目:
+      <select id="style">
+        <option value="1">自由形</option><option value="2">背泳ぎ</option>
+        <option value="3">平泳ぎ</option><option value="4">バタフライ</option>
+        <option value="5">個人メドレー</option><option value="6">フリーリレー</option><option value="7">メドレーリレー</option>
+      </select>
+    </label>
+    <label>距離:
+      <select id="distance">
+        <option value="50">50m</option><option value="100">100m</option>
+        <option value="200">200m</option><option value="400">400m</option>
+        <option value="800">800m</option><option value="1500">1500m</option>
+      </select>
+    </label>
+
+    <div class="button-row">
+      <button type="button" id="setupRace">決定</button>
+    </div>
+    <div id="formArea"></div>
+    <div class="button-row">
+      <button type="button" id="addSwimmer" style="display:none;">＋選手追加</button>
+      <button type="button" id="submitData" style="display:none;">CSVダウンロード</button>
+    </div>
+  </form>
+
+  <script>
+    const formArea = document.getElementById("formArea");
+    let lapPoints = [];
+
+    document.getElementById("setupRace").addEventListener("click", () => {
+      const distance = parseInt(document.getElementById("distance").value, 10);
+      lapPoints = Array.from({ length: Math.floor(distance / 25) + 1 }, (_, i) => i * 25);
+      formArea.innerHTML = "";
+      addSwimmerBlock();
+      document.getElementById("addSwimmer").style.display = "inline";
+      document.getElementById("submitData").style.display = "inline";
+    });
+
+    document.getElementById("addSwimmer").addEventListener("click", addSwimmerBlock);
+
+    function addSwimmerBlock() {
+      const div = document.createElement("div");
+      div.className = "swimmer-block";
+
+      const selectedStyle = document.getElementById("style").value;
+      let nameInputs = "";
+
+      if (selectedStyle === "6" || selectedStyle === "7") {
+        nameInputs += `<label>リレーメンバー:</label>`;
+        for (let i = 0; i < 4; i++) {
+          nameInputs += `<label>メンバー${i + 1}:<input type="text" class="name"></label>`;
+        }
+      } else {
+        nameInputs = `<label>名前:<input type="text" class="name"></label>`;
+      }
+
+      const lapFields = lapPoints.map((lap, i) => {
+        const label = i === 0 ? "リアクションタイム" : `${lap}m`;
+        const className = i === 0 ? "reaction" : "lap";
+        return `<div class="lap-input-group"><label>${label}
+          <input type="text" inputmode="numeric" pattern="[0-9]*" class="${className}" data-distance="${lap}" placeholder="例: 12345"></label>
+          <span class="formatted-time"></span></div>`;
+      }).join('');
+
+      const remarks = `<label>備考：<input type="text" class="remarks"></label>`;
+      const deleteButton = `<button type="button" class="deleteSwimmer">削除</button>`;
+
+      div.innerHTML = nameInputs + lapFields + remarks + deleteButton;
+      formArea.appendChild(div);
+
+      div.querySelector(".deleteSwimmer").addEventListener("click", () => {
+        div.remove();
+      });
+
+      attachTimeFormatListeners(div);
+    }
+
+    function formatTime(raw) {
+      const str = String(raw).replace(/\D/g, ""); // 数字以外除去
+      if (!/^\d{1,6}$/.test(str)) return "";
+
+      const num = str.padStart(6, "0");
+      const minutes = parseInt(num.slice(0, num.length - 4), 10);
+      const seconds = parseInt(num.slice(-4, -2), 10);
+      const hundredths = num.slice(-2);
+
+      return minutes > 0
+        ? `${minutes}:${String(seconds).padStart(2, "0")}.${hundredths}`
+        : `${seconds}.${hundredths}`;
+    }
+
+    function formatFromHundredths(raw) {
+      const num = parseInt(raw, 10);
+      if (isNaN(num)) return "";
+
+      const totalSeconds = num / 100;
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = Math.floor(totalSeconds % 60);
+      const hundredths = Math.round((totalSeconds - Math.floor(totalSeconds)) * 100);
+
+      const formattedSeconds = String(seconds).padStart(2, "0");
+      const formattedHundredths = String(hundredths).padStart(2, "0");
+
+      return minutes > 0
+        ? `${minutes}:${formattedSeconds}.${formattedHundredths}`
+        : `${seconds}.${formattedHundredths}`;
+    }
+
+
+
+
+
+    function toSeconds(input) {
+      if (!input) return 0;
+
+      const str = String(input).trim();
+
+      if (/^\d{1,6}$/.test(str)) {
+        // 入力が数値形式（例: "123456" → 12:34.56）
+        const num = str.padStart(6, "0");
+        const minutes = parseInt(num.slice(0, num.length - 4), 10);
+        const seconds = parseInt(num.slice(-4, -2), 10);
+        const hundredths = parseInt(num.slice(-2), 10);
+        return minutes * 60 + seconds + hundredths / 100;
+      }
+
+      // 入力が m:ss.xx または ss.xx
+      const parts = str.split(":");
+      if (parts.length === 2) {
+        return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+      } else {
+        return parseFloat(parts[0]);
+      }
+    }
+
+
+    function attachTimeFormatListeners(scope) {
+      const inputs = scope.querySelectorAll(".reaction, .lap");
+      inputs.forEach(input => {
+        input.addEventListener("input", () => {
+          const raw = input.value.trim();
+          const span = input.closest(".lap-input-group").querySelector(".formatted-time");
+          if (span) {
+            span.textContent = formatTime(raw);
+          }
+        });
+      });
+    }
+
+    document.getElementById("submitData").addEventListener("click", () => {
+      const styleMap = {
+        "1": "自由形", "2": "背泳ぎ", "3": "平泳ぎ",
+        "4": "バタフライ", "5": "個人メドレー", "6": "フリーリレー", "7": "メドレーリレー"
+      };
+
+      document.querySelectorAll(".swimmer-block").forEach(block => {
+        const names = Array.from(block.querySelectorAll(".name")).map(i => i.value.trim());
+        const nameLine = names.join("/");
+        const reaction = block.querySelector(".reaction")?.value.trim() || "";
+        const remarks = block.querySelector(".remarks")?.value.trim() || "";
+
+        const eventName = document.getElementById("eventName").value;
+        const distance = document.getElementById("distance").value;
+        const styleId = document.getElementById("style").value;
+        const styleLabel = styleMap[styleId];
+
+        let csv = `name,distance,style,event\n`;
+        csv += `${nameLine},${distance}m,${styleLabel},${eventName}\n\n`;
+        csv += `,laps,25m split,50m split,100m split\n`;
+
+        if (reaction) {
+          csv += `リアクションタイム,${formatTime(reaction)},,,\n`;
+        }
+
+        const lapInputs = Array.from(block.querySelectorAll(".lap"));
+        const times = lapInputs.map(input => {
+          const raw = input.value.trim();
+          const formatted = formatTime(raw);
+          return {
+            distance: input.dataset.distance,
+            formatted,
+            seconds: toSeconds(formatted)
+          };
+        });
+
+        times.forEach((time, i) => {
+          const split25 = i === 0 ? time.seconds : time.seconds - times[i - 1].seconds;
+          let split50 = "";
+          let split100 = "";
+          const distInt = parseInt(time.distance, 10);
+          if (distInt % 50 === 0 && i >= 0) {
+            split50 = i === 1 ? formatFromHundredths(time.seconds * 100): formatFromHundredths((time.seconds - times[i - 2].seconds) * 100);
+          }
+          if (distInt % 100 === 0 && i >= 0) {
+            split100 = i ===  3 ? formatFromHundredths(time.seconds * 100): formatFromHundredths((time.seconds - times[i - 4].seconds) * 100);
+          }
+          csv += `${time.distance}m,${time.formatted},${split25.toFixed(2)},${split50},${split100}\n`;
+        });
+
+        if (remarks) {
+          csv += `\n備考,${remarks}\n`;
+        }
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const filename = `${nameLine}_${distance}m_${styleLabel}.csv`;
+        saveAs(blob, filename);
+      });
+    });
+  </script>
+</body>
+</html>
