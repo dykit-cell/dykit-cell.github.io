@@ -1,0 +1,220 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ラップタイム入力フォーム</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 1em;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    label {
+      display: block;
+      margin-top: 1em;
+      font-weight: bold;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 0.5em;
+      margin-top: 0.3em;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+    .swimmer-block {
+      border: 1px solid #aaa;
+      padding: 1em;
+      margin-top: 1em;
+      border-radius: 6px;
+      background-color: #f9f9f9;
+    }
+    .lap-input-group {
+      margin-top: 1em;
+    }
+    .lap-input-group label {
+      margin-bottom: 0.2em;
+      font-weight: normal;
+    }
+    .formatted-time {
+      display: block;
+      margin-top: 0.2em;
+      color: gray;
+      font-size: 0.9em;
+    }
+    .button-row {
+      margin-top: 1em;
+      display: flex;
+      gap: 0.5em;
+    }
+    .deleteSwimmer {
+      margin-top: 1em;
+      background-color: #f44336;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h2>ラップタイム入力フォーム</h2>
+  <form id="lapForm" action="https://script.google.com/macros/s/AKfycbygn8UW9Pl3Af4k9iYsjFfGvJUigrbcdavwFqnJamaqYk7IPLLYhQxdJ5d8Qc0KvIa9OA/exec" method="GET" onsubmit="return prepareAndSubmit();">
+    <label>大会名:
+      <select id="eventName"></select>
+    </label>
+    <label>水路:
+      <select id="courseType">
+        <option value="1">長水路</option>
+        <option value="2">短水路</option>
+      </select>
+    </label>
+    <label>性別:
+      <select id="gender">
+        <option value="1">男子</option>
+        <option value="2">女子</option>
+        <option value="3">混合</option>
+      </select>
+    </label>
+    <label>種目:
+      <select id="style">
+        <option value="1">自由形</option>
+        <option value="2">背泳ぎ</option>
+        <option value="3">平泳ぎ</option>
+        <option value="4">バタフライ</option>
+        <option value="5">個人メドレー</option>
+        <option value="6">フリーリレー</option>
+        <option value="7">メドレーリレー</option>
+      </select>
+    </label>
+    <label>距離:
+      <select id="distance">
+        <option value="50">50m</option>
+        <option value="100">100m</option>
+        <option value="200">200m</option>
+        <option value="400">400m</option>
+        <option value="800">800m</option>
+        <option value="1500">1500m</option>
+      </select>
+    </label>
+    <div class="button-row">
+      <button type="button" id="setupRace">決定</button>
+    </div>
+    <div id="formArea"></div>
+    <div class="button-row">
+      <button type="button" id="addSwimmer" style="display:none;">＋選手追加</button>
+      <button type="submit" id="submitData" style="display:none;">送信</button>
+    </div>
+    <input type="hidden" name="data" id="dataField">
+  </form>
+  <script>
+    const formArea = document.getElementById("formArea");
+    let nameOptions = [];
+    let lapPoints = [];
+
+    window.onload = async () => {
+      try {
+        const res = await fetch("https://script.google.com/macros/s/AKfycbxj5svUmdB8EocDzZZnZGbi8izvjWQSk5Nh-K76y_ikmnWxOlCjv-S7gJaRfOgzpenXCA/exec");
+        const data = await res.json();
+        nameOptions = data.nameOptions;
+        const eventOptions = data.eventName;
+        document.getElementById("eventName").innerHTML = eventOptions.map(e => `<option value="${e.id}">${e.value}</option>`).join('');
+      } catch (err) {
+        console.error("初期データ取得失敗", err);
+      }
+    };
+
+    document.getElementById("setupRace").addEventListener("click", () => {
+      const distance = parseInt(document.getElementById("distance").value, 10);
+      lapPoints = Array.from({ length: Math.floor(distance / 25) + 1 }, (_, i) => i * 25);
+      formArea.innerHTML = "";
+      addSwimmerBlock();
+      document.getElementById("addSwimmer").style.display = "inline";
+      document.getElementById("submitData").style.display = "inline";
+    });
+
+    document.getElementById("addSwimmer").addEventListener("click", addSwimmerBlock);
+
+    function addSwimmerBlock() {
+      const div = document.createElement("div");
+      div.className = "swimmer-block";
+
+      const selectedStyle = document.getElementById("style").value;
+      let nameInputs = "";
+
+      if (selectedStyle === "6" || selectedStyle === "7") {
+        nameInputs += `<label>リレーメンバー:</label>`;
+        for (let i = 0; i < 4; i++) {
+          nameInputs += `<label>メンバー${i + 1}:<select class="name">${nameOptions.map(n => `<option value="${n.id}">${n.value}</option>`).join('')}</select></label>`;
+        }
+      } else {
+        nameInputs = `<label>名前:<select class="name">${nameOptions.map(n => `<option value="${n.id}">${n.value}</option>`).join('')}</select></label>`;
+      }
+
+      const lapFields = lapPoints.map((lap, i) => {
+        const label = i === 0 ? "リアクションタイム" : `${lap}m`;
+        const className = i === 0 ? "reaction" : "lap";
+        return `<div class="lap-input-group"><label>${label}<input type="text" inputmode="numeric" pattern="[0-9]*" class="${className}" data-distance="${lap}" placeholder="数値のみ（例: 12345）"></label><span class="formatted-time"></span></div>`;
+      }).join('');
+
+      const remarks = `<label>備考：<input type="text" class="remarks"></label>`;
+      const deleteButton = `<button type="button" class="deleteSwimmer">削除</button>`;
+
+      div.innerHTML = nameInputs + lapFields + remarks + deleteButton;
+      formArea.appendChild(div);
+
+      div.querySelector(".deleteSwimmer").addEventListener("click", () => {
+        div.remove();
+      });
+
+      attachTimeFormatListeners(div);
+    }
+
+    function formatTime(raw) {
+      if (!/^[0-9]{1,5}$/.test(raw)) return "";
+      const num = raw.padStart(5, "0");
+      const minutes = num.length === 5 ? parseInt(num.slice(0, num.length - 4), 10) : 0;
+      const seconds = parseInt(num.slice(-4, -2), 10);
+      const hundredths = num.slice(-2);
+      return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, "0")}.${hundredths}` : `${seconds}.${hundredths}`;
+    }
+
+    function attachTimeFormatListeners(scope) {
+      const inputs = scope.querySelectorAll(".reaction, .lap");
+      inputs.forEach(input => {
+        input.addEventListener("input", () => {
+          const raw = input.value.trim();
+          const span = input.closest(".lap-input-group").querySelector(".formatted-time");
+          if (span) {
+            span.textContent = formatTime(raw);
+          }
+        });
+      });
+    }
+
+    function prepareAndSubmit() {
+      const eventName = parseInt(document.getElementById("eventName").value);
+      const courseType = parseInt(document.getElementById("courseType").value);
+      const gender = parseInt(document.getElementById("gender").value);
+      const style = parseInt(document.getElementById("style").value);
+      const distance = parseInt(document.getElementById("distance").value);
+
+      const swimmers = Array.from(document.getElementsByClassName("swimmer-block")).map(block => {
+        const nameElements = block.querySelectorAll(".name");
+        const names = Array.from(nameElements).map(sel => parseInt(sel.value));
+        const reaction = block.querySelector(".reaction")?.value.trim() || "";
+        const lapInputs = block.querySelectorAll(".lap");
+        const laps = {};
+        lapInputs.forEach(input => {
+          laps[input.dataset.distance] = input.value.trim();
+        });
+        const remarks = block.querySelector(".remarks")?.value.trim() || "";
+        return { names, reaction, laps, remarks };
+      });
+
+      const payload = { eventName, courseType, gender, style, distance, swimmers };
+      document.getElementById("dataField").value = JSON.stringify(payload);
+      return true;
+    }
+  </script>
+</body>
+</html>
