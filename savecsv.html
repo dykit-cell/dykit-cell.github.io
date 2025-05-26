@@ -250,16 +250,15 @@
         if (remarks) {
           csv += `\n備考,${remarks}\n`;
         }
-
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const filename = `${nameLine}_${distance}m_${styleLabel}.csv`;
         saveAs(blob, filename);
       });
     });
   </script>
+  
   <!-- 広告0 -->
   <ins class="adsbygoogle"
-    style="display:inline-block;width:728px;height:90px"
     data-ad-client="ca-pub-1576927028314389"
     data-ad-slot="2282838352"></ins>
   <script>
