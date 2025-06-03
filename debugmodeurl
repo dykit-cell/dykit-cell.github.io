@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <title>Excelアップロードとシート選択</title>
+  <style>/* スタイルは適宜 */</style>
+</head>
+<body>
+  <h1>本番マスタExcelアップロード</h1>
+  <form id="uploadForm">
+    <input type="file" id="excelFile" accept=".xlsx" required><br><br>
+    <button type="submit">アップロードしてシート一覧表示</button>
+  </form>
+
+  <div id="status"></div>
+  <div id="sheetSelection" style="display:none;">
+    <h2>シートを選択してください:</h2>
+    <form id="selectSheetForm">
+      <div id="sheetRadios"></div>
+      <input type="hidden" id="uploadedSpreadsheetId">
+      <button type="submit">選択したシートをコピー</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const file = document.getElementById('excelFile').files[0];
+      const statusDiv = document.getElementById('status');
+      statusDiv.textContent = 'アップロード中...';
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const base64Data = event.target.result.split(',')[1];
+        google.script.run
+          .withSuccessHandler(function(response) {
+            if (response.success) {
+              statusDiv.textContent = 'アップロード成功！ファイル名: ' + response.fileName;
+              // シートIDをhiddenフィールドに保存
+              document.getElementById('uploadedSpreadsheetId').value = response.spreadsheetId;
+              
+              const sheetRadiosDiv = document.getElementById('sheetRadios');
+              sheetRadiosDiv.innerHTML = ''; // クリア
+              response.sheetNames.forEach(function(name) {
+                const radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'selectedSheet';
+                radio.value = name;
+                radio.id = 'sheet_' + name; // IDをユニークに
+                
+                const label = document.createElement('label');
+                label.htmlFor = 'sheet_' + name;
+                label.textContent = name;
+                
+                sheetRadiosDiv.appendChild(radio);
+                sheetRadiosDiv.appendChild(label);
+                sheetRadiosDiv.appendChild(document.createElement('br'));
+              });
+              document.getElementById('sheetSelection').style.display = 'block';
+            } else {
+              statusDiv.textContent = 'アップロード失敗: ' + response.message;
+            }
+          })
+          .withFailureHandler(function(error) {
+            statusDiv.textContent = 'エラー: ' + error.message;
+          })
+          .processExcelUpload(base64Data, file.name, file.type);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Webアプリ2への送信
+    document.getElementById('selectSheetForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const selectedSheet = document.querySelector('input[name="selectedSheet"]:checked');
+      if (!selectedSheet) {
+        alert('シートを選択してください！');
+        return;
+      }
+      const uploadedSpreadsheetId = document.getElementById('uploadedSpreadsheetId').value;
+
+      const statusDiv = document.getElementById('status');
+      statusDiv.textContent = 'シート情報転送中...';
+
+      // ここでWebアプリ2にデータを送信する。
+      // Webアプリ2のURLを直接指定してfetch APIを使うか、
+      // または、Webアプリ1のGAS関数を介してWebアプリ2にHTTPリクエストを送信する。
+      // システムの複雑さを考えると、Webアプリ1のGAS関数からWebアプリ2へHTTPリクエストを送信する方が安全。
+      google.script.run
+        .withSuccessHandler(function(response) {
+          statusDiv.textContent = 'シート情報転送成功！結果: ' + (response.message || '処理完了');
+        })
+        .withFailureHandler(function(error) {
+          statusDiv.textContent = 'シート情報転送失敗: ' + error.message;
+        })
+        .transferSheetInfoToApp2(uploadedSpreadsheetId, selectedSheet.value);
+    });
+  </script>
+</body>
+</html>
