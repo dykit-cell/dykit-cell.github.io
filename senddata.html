@@ -320,7 +320,7 @@
         };
 
         // 共通URLが貼られている場合のみ、裏側でfetchを投げる
-        if (UNIFIED_GAS_URL && UNIFIED_GAS_URL !== "ここにURLを貼り付けてください") {
+        if (UNIFIED_GAS_URL && UNIFIED_GAS_URL !== "https://script.google.com/macros/s/AKfycbzxOEdNLq6BwxJVCvNWj9GJroJJQLKHwX4cI5M1BsadamAv2941mxNbMQ1cYihzVDipQA/exec") {
           try {
             await fetch(UNIFIED_GAS_URL, {
               method: 'POST',
