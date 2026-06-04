@@ -79,7 +79,7 @@
 <body>
   <h2>ラップタイム入力フォーム</h2>
   
-  <form id="lapForm">
+  <form id="lapForm" action="https://script.google.com/macros/s/AKfycbygn8UW9Pl3Af4k9iYsjFfGvJUigrbcdavwFqnJamaqYk7IPLLYhQxdJ5d8Qc0KvIa9OA/exec" method="GET" onsubmit="return prepareAndSubmit(event);">
     <label>大会名:
       <select id="eventName"></select>
     </label>
@@ -125,17 +125,18 @@
     
     <div class="button-row">
       <button type="button" id="addSwimmer" style="display:none;">＋選手追加</button>
-      <button type="button" id="submitData" style="display:none;">DBへ送信（swim-webに反映）</button>
+      <button type="submit" id="submitData" style="display:none;">送信（ドライブ保存＆swim-web反映）</button>
     </div>
+    <input type="hidden" name="data" id="dataField">
   </form>
 
   <script>
     // ==========================================
-    // ⚠️【必須】動画分析で使っている共通のGAS URLをここに貼ってください
+    // ⚠️【必須】動画分析で使っている「共通のGAS URL」をここに貼ってください
     // ==========================================
     const UNIFIED_GAS_URL = "https://script.google.com/macros/s/AKfycbzxOEdNLq6BwxJVCvNWj9GJroJJQLKHwX4cI5M1BsadamAv2941mxNbMQ1cYihzVDipQA/exec";
     
-    // (名前リストを取得するための元のURLはそのまま残します)
+    // 名前の選択肢を引っ張ってくる元のURL（そのまま残しています）
     const OPTIONS_GAS_URL = "https://script.google.com/macros/s/AKfycbxj5svUmdB8EocDzZZnZGbi8izvjWQSk5Nh-K76y_ikmnWxOlCjv-S7gJaRfOgzpenXCA/exec";
 
     const formArea = document.getElementById("formArea");
@@ -200,7 +201,6 @@
       attachTimeFormatListeners(div);
     }
 
-    // 入力された数値を「1:05.23」などの形式にする
     function formatTime(raw) {
       if (!/^[0-9]{1,5}$/.test(raw)) return "";
       const num = raw.padStart(5, "0");
@@ -210,7 +210,6 @@
       return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, "0")}.${hundredths}` : `${seconds}.${hundredths}`;
     }
 
-    // 「1:05.23」を動画分析用に秒数（65.23）に変換する関数
     function timeToSeconds(formatted) {
       if (!formatted) return 0;
       const parts = formatted.split(':');
@@ -233,13 +232,41 @@
       });
     }
 
-    // --- swim-webへのデータ送信処理 ---
-    document.getElementById("submitData").addEventListener("click", async () => {
+    // --- 元のドライブ保存システムへの通常送信と、新DBへの送信を両立させる関数 ---
+    async function prepareAndSubmit(e) {
+      // 一旦、通常の画面遷移送信をストップさせる
+      e.preventDefault();
+
       const btn = document.getElementById("submitData");
-      btn.innerText = "送信中...";
+      btn.innerText = "同期処理中...";
       btn.disabled = true;
 
-      // セレクトボックスの表示テキストを取得する
+      // 1️⃣【ドライブ保存用】元のペイロード作成ロジック（完全に維持）
+      const eventName = parseInt(document.getElementById("eventName").value);
+      const courseType = parseInt(document.getElementById("courseType").value);
+      const gender = parseInt(document.getElementById("gender").value);
+      const style = parseInt(document.getElementById("style").value);
+      const distance = parseInt(document.getElementById("distance").value);
+
+      const swimmers = Array.from(document.getElementsByClassName("swimmer-block")).map(block => {
+        const nameElements = block.querySelectorAll(".name");
+        const names = Array.from(nameElements).map(sel => parseInt(sel.value));
+        const reaction = block.querySelector(".reaction")?.value.trim() || "";
+        const lapInputs = block.querySelectorAll(".lap");
+        const laps = {};
+        lapInputs.forEach(input => {
+          laps[input.dataset.distance] = input.value.trim();
+        });
+        const remarks = block.querySelector(".remarks")?.value.trim() || "";
+        return { names, reaction, laps, remarks };
+      });
+
+      const payload = { eventName, courseType, gender, style, distance, swimmers };
+      // 元の隠しフィールドにJSON文字列をセット（これで元のGAS側は今まで通り動きます）
+      document.getElementById("dataField").value = JSON.stringify(payload);
+
+
+      // 2️⃣【swim-web自動反映用】共通DBへバックグラウンドでPOST送信
       const getText = (id) => {
         const sel = document.getElementById(id);
         return sel.options[sel.selectedIndex].text;
@@ -247,14 +274,12 @@
 
       const compName = getText("eventName");
       const styleName = getText("style");
-      const distance = document.getElementById("distance").value;
-      const eventFull = `${distance}m ${styleName}`;
+      const distanceVal = document.getElementById("distance").value;
+      const eventFull = `${distanceVal}m ${styleName}`;
 
-      const swimmers = document.getElementsByClassName("swimmer-block");
-      let successCount = 0;
+      const swimmerBlocks = document.getElementsByClassName("swimmer-block");
       
-      for (let block of swimmers) {
-        // 名前を取得（リレーの場合は / で繋ぐ）
+      for (let block of swimmerBlocks) {
         const nameSelects = block.querySelectorAll(".name");
         let athleteName = "";
         if (nameSelects.length > 1) {
@@ -263,7 +288,6 @@
           athleteName = nameSelects[0].options[nameSelects[0].selectedIndex].text;
         }
         
-        // ラップタイムを取得して計算
         const lapInputs = block.querySelectorAll(".lap");
         let finalTimeStr = "--.--";
         let passDataSeconds = [];
@@ -272,23 +296,22 @@
           const val = input.value.trim();
           if (val) {
             const formatted = formatTime(val);
-            finalTimeStr = formatted; // 最後の入力値が公式記録になる
-            passDataSeconds.push(timeToSeconds(formatted)); // 動画アプリ用に秒数へ変換
+            finalTimeStr = formatted;
+            passDataSeconds.push(timeToSeconds(formatted));
           }
         });
 
-        // 備考をどうするか（ひとまず今回は保存データに含めない、またはコメントとして扱うことも可能ですが今回は基本形）
-        const payload = {
+        const webPayload = {
           action: 'saveRecord',
           data: {
             athlete: athleteName,
             event: eventFull,
             comp: compName,
-            time: finalTimeStr, // 例: "1:05.23"
+            time: finalTimeStr,
             strokes: 0,
             videoUrl: "",
             rawData: { 
-                passData: passDataSeconds, // 例: [25.5, 52.3, 65.23]
+                passData: passDataSeconds,
                 tempoData: [],
                 avgTempo: "--",
                 strokeRate: "--"
@@ -296,27 +319,22 @@
           }
         };
 
-        try {
-          const res = await fetch(UNIFIED_GAS_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-          });
-          const result = await res.json();
-          if (result.status === "success") successCount++;
-        } catch (err) {
-          console.error("送信エラー:", err);
+        // 共通URLが貼られている場合のみ、裏側でfetchを投げる
+        if (UNIFIED_GAS_URL && UNIFIED_GAS_URL !== "ここにURLを貼り付けてください") {
+          try {
+            await fetch(UNIFIED_GAS_URL, {
+              method: 'POST',
+              body: JSON.stringify(webPayload)
+            });
+          } catch (err) {
+            console.error("swim-webへの自動反映に失敗しました:", err);
+          }
         }
       }
 
-      if (successCount > 0) {
-        alert(`${successCount}件の記録をswim-webに保存しました！`);
-      } else {
-        alert("送信に失敗しました。URLが正しいか確認してください。");
-      }
-
-      btn.innerText = "DBへ送信（swim-webに反映）";
-      btn.disabled = false;
-    });
+      // 3️⃣ 両方の処理が終わったら、本来のフォームの「送信（ドライブへの保存遷移）」を実行
+      document.getElementById("lapForm").submit();
+    }
   </script>
 </body>
 </html>
