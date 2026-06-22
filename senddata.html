@@ -126,11 +126,11 @@
       btn.innerText = "同期処理中... (画面を閉じないでください)";
       btn.disabled = true;
 
-      // 1. 元のドライブ保存用のデータを作成
-      // ★修正：parseInt() を削除し、さらに確実にするため画面に表示されている大会名(text)をそのまま取得します。
-      const eventSel = document.getElementById("eventName");
-      const eventName = eventSel.options[eventSel.selectedIndex].text; 
-      
+      // ==============================================================
+      // 1️⃣ 【ドライブ保存用データ】
+      // ★絶対に元のコードと同じ「数字(ID)」を取得するように戻しました！
+      // ==============================================================
+      const eventName = parseInt(document.getElementById("eventName").value);
       const courseType = parseInt(document.getElementById("courseType").value);
       const gender = parseInt(document.getElementById("gender").value);
       const style = parseInt(document.getElementById("style").value);
@@ -147,16 +147,21 @@
         return { names, reaction, laps, remarks };
       });
 
-      // ここで作成されるJSONのeventNameには「関東学生選手権」などの文字がそのまま入るようになります
+      // ここで作成されるJSONのeventNameは確実に元の「数字(ID)」になります
       const payload = { eventName, courseType, gender, style, distance, swimmers };
       document.getElementById("dataField").value = JSON.stringify(payload);
 
-      // 2. swim-web用データベースへの送信処理
-      const compName = eventName; // 上で取得した大会名と同じものを使います
+
+      // ==============================================================
+      // 2️⃣ 【swim-web同期用データ】
+      // swim-webの画面表示用に、こっちだけ「文字（テキスト）」を抜き出します
+      // ==============================================================
+      const eventSel = document.getElementById("eventName");
+      const compNameText = eventSel.options[eventSel.selectedIndex].text;
       const styleSel = document.getElementById("style");
-      const styleName = styleSel.options[styleSel.selectedIndex].text;
+      const styleNameText = styleSel.options[styleSel.selectedIndex].text;
       const distanceVal = document.getElementById("distance").value;
-      const eventFull = `${distanceVal}m ${styleName}`;
+      const eventFull = `${distanceVal}m ${styleNameText}`;
       
       const swimmerBlocks = document.getElementsByClassName("swimmer-block");
       let allSuccess = true;
@@ -181,7 +186,7 @@
           const webPayload = {
             action: 'saveRecord',
             data: {
-              athlete: athleteName, event: eventFull, comp: compName, time: finalTimeStr,
+              athlete: athleteName, event: eventFull, comp: compNameText, time: finalTimeStr,
               strokes: 0, videoUrl: "", rawData: { passData: passDataSeconds, tempoData: [], avgTempo: "--", strokeRate: "--" }
             }
           };
@@ -198,15 +203,15 @@
             allSuccess = false;
           }
         }
-      } else {
-        console.warn("swim-web用のGAS URLが設定されていないため、個人ドライブのみに保存します。");
       }
 
       if (!allSuccess) {
           alert("一部のデータがswim-webに正常に同期されませんでした。\nURL設定や通信環境を確認してください。");
       }
 
-      // 3. 通信が完了したら、本来の画面遷移（ドライブ保存）を実行する
+      // ==============================================================
+      // 3️⃣ 通信が完了したら、本来の画面遷移（ドライブ保存）を実行する
+      // ==============================================================
       setTimeout(() => {
         document.getElementById("lapForm").submit();
       }, 500); 
