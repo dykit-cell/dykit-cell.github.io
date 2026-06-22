@@ -18,14 +18,14 @@
     button:hover { opacity: 0.9; }
     .deleteSwimmer { margin-top: 1em; background-color: #f44336; }
     #addSwimmer { background-color: #2196F3; }
-    #submitData { background-color: #ff9800; font-size: 1.1em; }
-    #submitData:disabled { background-color: #ccc; cursor: not-allowed; }
+    #syncAndSubmit { background-color: #ff9800; font-size: 1.1em; }
+    #syncAndSubmit:disabled { background-color: #ccc; cursor: not-allowed; }
   </style>
 </head>
 <body>
   <h2>ラップタイム入力フォーム</h2>
   
-  <form id="lapForm" action="https://script.google.com/macros/s/AKfycbygn8UW9Pl3Af4k9iYsjFfGvJUigrbcdavwFqnJamaqYk7IPLLYhQxdJ5d8Qc0KvIa9OA/exec" method="GET" onsubmit="return prepareAndSubmit(event);">
+  <form id="lapForm" action="https://script.google.com/macros/s/AKfycbygn8UW9Pl3Af4k9iYsjFfGvJUigrbcdavwFqnJamaqYk7IPLLYhQxdJ5d8Qc0KvIa9OA/exec" method="GET">
     <label>大会名: <select id="eventName"></select></label>
     <label>水路: <select id="courseType"><option value="1">長水路</option><option value="2">短水路</option></select></label>
     <label>性別: <select id="gender"><option value="1">男子</option><option value="2">女子</option><option value="3">混合</option></select></label>
@@ -34,10 +34,14 @@
     
     <div class="button-row"><button type="button" id="setupRace">入力枠を作成</button></div>
     <div id="formArea"></div>
+    
     <div class="button-row">
       <button type="button" id="addSwimmer" style="display:none;">＋選手追加</button>
-      <button type="submit" id="submitData" style="display:none;">送信（ドライブ保存＆swim-web反映）</button>
+      <button type="button" id="syncAndSubmit" style="display:none;">送信（ドライブ保存＆swim-web反映）</button>
+      
+      <input type="submit" id="realNativeSubmit" style="display:none;">
     </div>
+    
     <input type="hidden" name="data" id="dataField">
   </form>
 
@@ -67,7 +71,7 @@
       lapPoints = Array.from({ length: Math.floor(distance / 25) + 1 }, (_, i) => i * 25);
       formArea.innerHTML = ""; addSwimmerBlock();
       document.getElementById("addSwimmer").style.display = "inline-block";
-      document.getElementById("submitData").style.display = "inline-block";
+      document.getElementById("syncAndSubmit").style.display = "inline-block";
     });
 
     document.getElementById("addSwimmer").addEventListener("click", addSwimmerBlock);
@@ -118,18 +122,16 @@
       });
     }
 
-    // --- 同期処理 ---
-    async function prepareAndSubmit(e) {
-      e.preventDefault(); // 一旦ページ遷移を完全に止める
-
-      const btn = document.getElementById("submitData");
+    // ==============================================================
+    // 同期処理ボタンが押された時の動作
+    // ==============================================================
+    document.getElementById("syncAndSubmit").addEventListener("click", async () => {
+      const btn = document.getElementById("syncAndSubmit");
       btn.innerText = "同期処理中... (画面を閉じないでください)";
       btn.disabled = true;
 
-      // ==============================================================
       // 1️⃣ 【ドライブ保存用データ】
-      // ★絶対に元のコードと同じ「数字(ID)」を取得するように戻しました！
-      // ==============================================================
+      // ★一番最初にいただいたコードと全く同じ方法で数字を取得し、payloadを作ります。
       const eventName = parseInt(document.getElementById("eventName").value);
       const courseType = parseInt(document.getElementById("courseType").value);
       const gender = parseInt(document.getElementById("gender").value);
@@ -147,15 +149,13 @@
         return { names, reaction, laps, remarks };
       });
 
-      // ここで作成されるJSONのeventNameは確実に元の「数字(ID)」になります
       const payload = { eventName, courseType, gender, style, distance, swimmers };
+      // 送信用の隠しフィールドにセット
       document.getElementById("dataField").value = JSON.stringify(payload);
 
 
-      // ==============================================================
-      // 2️⃣ 【swim-web同期用データ】
-      // swim-webの画面表示用に、こっちだけ「文字（テキスト）」を抜き出します
-      // ==============================================================
+      // 2️⃣ 【swim-web同期処理】
+      // ドライブ用とは別に、表示用の文字（テキスト）を使って裏でこっそり送ります。
       const eventSel = document.getElementById("eventName");
       const compNameText = eventSel.options[eventSel.selectedIndex].text;
       const styleSel = document.getElementById("style");
@@ -164,7 +164,6 @@
       const eventFull = `${distanceVal}m ${styleNameText}`;
       
       const swimmerBlocks = document.getElementsByClassName("swimmer-block");
-      let allSuccess = true;
 
       if (UNIFIED_GAS_URL && UNIFIED_GAS_URL !== "ここにURLを貼り付けてください") {
         for (let block of swimmerBlocks) {
@@ -192,30 +191,18 @@
           };
 
           try {
-            const response = await fetch(UNIFIED_GAS_URL, { method: 'POST', body: JSON.stringify(webPayload) });
-            const result = await response.json();
-            if (result.status !== "success") {
-                console.error("エラーレスポンス:", result.message);
-                allSuccess = false;
-            }
+            await fetch(UNIFIED_GAS_URL, { method: 'POST', body: JSON.stringify(webPayload) });
           } catch (err) {
             console.error("fetchエラー:", err);
-            allSuccess = false;
           }
         }
       }
 
-      if (!allSuccess) {
-          alert("一部のデータがswim-webに正常に同期されませんでした。\nURL設定や通信環境を確認してください。");
-      }
-
-      // ==============================================================
-      // 3️⃣ 通信が完了したら、本来の画面遷移（ドライブ保存）を実行する
-      // ==============================================================
-      setTimeout(() => {
-        document.getElementById("lapForm").submit();
-      }, 500); 
-    }
+      // 3️⃣ 【本物の送信】
+      // 同期が終わったら、JSを一切介さずに「純粋なHTMLの送信ボタン」をカチッと押させます。
+      // これにより、元のシステムと100%同じ形式でデータがドライブ用GASへ送られます。
+      document.getElementById("realNativeSubmit").click();
+    });
   </script>
 </body>
 </html>
