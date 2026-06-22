@@ -118,7 +118,7 @@
       });
     }
 
-    // --- 同期処理の強化版（確実に完了を待ってから遷移する） ---
+    // --- 同期処理 ---
     async function prepareAndSubmit(e) {
       e.preventDefault(); // 一旦ページ遷移を完全に止める
 
@@ -127,7 +127,10 @@
       btn.disabled = true;
 
       // 1. 元のドライブ保存用のデータを作成
-      const eventName = parseInt(document.getElementById("eventName").value);
+      // ★修正：parseInt() を削除し、さらに確実にするため画面に表示されている大会名(text)をそのまま取得します。
+      const eventSel = document.getElementById("eventName");
+      const eventName = eventSel.options[eventSel.selectedIndex].text; 
+      
       const courseType = parseInt(document.getElementById("courseType").value);
       const gender = parseInt(document.getElementById("gender").value);
       const style = parseInt(document.getElementById("style").value);
@@ -144,13 +147,14 @@
         return { names, reaction, laps, remarks };
       });
 
+      // ここで作成されるJSONのeventNameには「関東学生選手権」などの文字がそのまま入るようになります
       const payload = { eventName, courseType, gender, style, distance, swimmers };
       document.getElementById("dataField").value = JSON.stringify(payload);
 
       // 2. swim-web用データベースへの送信処理
-      const getText = (id) => { const sel = document.getElementById(id); return sel.options[sel.selectedIndex].text; };
-      const compName = getText("eventName");
-      const styleName = getText("style");
+      const compName = eventName; // 上で取得した大会名と同じものを使います
+      const styleSel = document.getElementById("style");
+      const styleName = styleSel.options[styleSel.selectedIndex].text;
       const distanceVal = document.getElementById("distance").value;
       const eventFull = `${distanceVal}m ${styleName}`;
       
@@ -183,7 +187,6 @@
           };
 
           try {
-            // 確実に応答が返ってくるまで待機する
             const response = await fetch(UNIFIED_GAS_URL, { method: 'POST', body: JSON.stringify(webPayload) });
             const result = await response.json();
             if (result.status !== "success") {
@@ -196,10 +199,9 @@
           }
         }
       } else {
-        alert("⚠️ swim-web用のGAS URLが設定されていないため、個人ドライブのみに保存します。");
+        console.warn("swim-web用のGAS URLが設定されていないため、個人ドライブのみに保存します。");
       }
 
-      // エラーがあった場合はアラートを出す
       if (!allSuccess) {
           alert("一部のデータがswim-webに正常に同期されませんでした。\nURL設定や通信環境を確認してください。");
       }
@@ -207,7 +209,7 @@
       // 3. 通信が完了したら、本来の画面遷移（ドライブ保存）を実行する
       setTimeout(() => {
         document.getElementById("lapForm").submit();
-      }, 500); // 念のため0.5秒の猶予を持たせる
+      }, 500); 
     }
   </script>
 </body>
