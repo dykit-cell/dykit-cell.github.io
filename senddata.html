@@ -51,12 +51,18 @@
     const formArea = document.getElementById("formArea");
     let nameOptions = []; let lapPoints = [];
 
+    // ① プルダウン復旧：GASがどんな配列の形を返してきてもエラーにさせない補強
     window.onload = async () => {
       try {
         const res = await fetch(OPTIONS_GAS_URL);
         const data = await res.json();
-        nameOptions = data.nameOptions;
-        const eventOptions = data.eventName;
+        
+        const rawNames = data.nameOptions || data.names || [];
+        const rawEvents = data.eventName || data.comps || [];
+        
+        nameOptions = rawNames.map(n => typeof n === 'object' ? n : {id: n, value: n});
+        const eventOptions = rawEvents.map(e => typeof e === 'object' ? e : {id: e, value: e});
+        
         document.getElementById("eventName").innerHTML = eventOptions.map(e => `<option value="${e.id}">${e.value}</option>`).join('');
       } catch (err) { console.error("初期データ取得失敗", err); }
     };
@@ -140,14 +146,16 @@
       const payload = { eventName, courseType, gender, style, distance, swimmers };
       document.getElementById("dataField").value = JSON.stringify(payload);
 
-      syncToSwimWebBackground();
+      // ② ドライブ送信保護：裏側のエラーでドライブへの記録を絶対に止めない
+      try {
+        syncToSwimWebBackground();
+      } catch (e) {
+        console.error("同期処理エラー", e);
+      }
 
-      return true; 
+      return true;
     }
 
-    // ==============================================================
-    // swim-web同期用（修正版：RTも確実に送信する）
-    // ==============================================================
     function syncToSwimWebBackground() {
       if (!UNIFIED_GAS_URL || UNIFIED_GAS_URL === "ここにURLを貼り付けてください") return;
 
@@ -165,24 +173,20 @@
         
         let finalTimeStr = "--.--"; 
         let passDataSeconds = [];
-        
-        // ★ 修正箇所: リアクションタイムを取得して配列の先頭に追加
-        const reactionInput = block.querySelector(".reaction");
-        if (reactionInput) {
-          const rtVal = reactionInput.value.trim();
-          if (rtVal) {
-            const rtFormatted = formatTime(rtVal);
-            passDataSeconds.push(timeToSeconds(rtFormatted));
-          }
-        }
 
-        // ラップタイムを取得して配列に追加
+        // ③ RT取得の修正：リアクションタイムを拾って配列の先頭に入れる
+        const reactionInput = block.querySelector(".reaction");
+        if (reactionInput && reactionInput.value.trim() !== "") {
+          const rtFormatted = formatTime(reactionInput.value.trim());
+          passDataSeconds.push(timeToSeconds(rtFormatted));
+        }
+        
         const lapInputs = block.querySelectorAll(".lap");
         lapInputs.forEach(input => {
           const val = input.value.trim();
           if (val) {
             const formatted = formatTime(val);
-            finalTimeStr = formatted; // 最終的に一番最後に入力されたタイムが全体の記録になります
+            finalTimeStr = formatted; 
             passDataSeconds.push(timeToSeconds(formatted));
           }
         });
