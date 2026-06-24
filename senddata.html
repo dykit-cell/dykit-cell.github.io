@@ -1,401 +1,214 @@
 <!DOCTYPE html>
-
 <html lang="ja">
-
 <head>
-
   <meta charset="UTF-8" />
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>ラップタイム入力フォーム</title>
-
   <style>
-
     body { font-family: sans-serif; padding: 1em; font-size: 16px; line-height: 1.6; background-color: #f0f2f5; }
-
     h2 { color: #333; }
-
     label { display: block; margin-top: 1em; font-weight: bold; color: #444; }
-
     input, select, button { width: 100%; padding: 0.6em; margin-top: 0.3em; font-size: 1rem; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-
     .swimmer-block { border: 1px solid #aaa; padding: 1em; margin-top: 1em; border-radius: 8px; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-
     .lap-input-group { margin-top: 1em; background: #f9f9f9; padding: 8px; border-radius: 4px; }
-
     .lap-input-group label { margin-bottom: 0.2em; font-weight: normal; margin-top: 0; }
-
     .formatted-time { display: block; margin-top: 0.2em; color: #0066cc; font-size: 1.1em; font-weight: bold; }
-
     .button-row { margin-top: 1.5em; display: flex; gap: 0.5em; }
-
     button { background-color: #4CAF50; color: white; border: none; font-weight: bold; cursor: pointer; padding: 0.8em; }
-
     button:hover { opacity: 0.9; }
-
     .deleteSwimmer { margin-top: 1em; background-color: #f44336; }
-
     #addSwimmer { background-color: #2196F3; }
-
     #submitData { background-color: #ff9800; font-size: 1.1em; }
-
+    #submitData:disabled { background-color: #ccc; cursor: not-allowed; }
   </style>
-
 </head>
-
 <body>
-
   <h2>ラップタイム入力フォーム</h2>
-
   
-
-  <form id="lapForm" action="https://script.google.com/macros/s/AKfycbygn8UW9Pl3Af4k9iYsjFfGvJUigrbcdavwFqnJamaqYk7IPLLYhQxdJ5d8Qc0KvIa9OA/exec" method="GET" onsubmit="return prepareAndSubmit();">
-
+  <form id="lapForm" action="https://script.google.com/macros/s/AKfycbygn8UW9Pl3Af4k9iYsjFfGvJUigrbcdavwFqnJamaqYk7IPLLYhQxdJ5d8Qc0KvIa9OA/exec" method="GET" onsubmit="return prepareAndSubmit(event);">
     <label>大会名: <select id="eventName"></select></label>
-
     <label>水路: <select id="courseType"><option value="1">長水路</option><option value="2">短水路</option></select></label>
-
     <label>性別: <select id="gender"><option value="1">男子</option><option value="2">女子</option><option value="3">混合</option></select></label>
-
     <label>種目: <select id="style"><option value="1">自由形</option><option value="2">背泳ぎ</option><option value="3">平泳ぎ</option><option value="4">バタフライ</option><option value="5">個人メドレー</option><option value="6">フリーリレー</option><option value="7">メドレーリレー</option></select></label>
-
     <label>距離: <select id="distance"><option value="50">50m</option><option value="100">100m</option><option value="200">200m</option><option value="400">400m</option><option value="800">800m</option><option value="1500">1500m</option></select></label>
-
     
-
     <div class="button-row"><button type="button" id="setupRace">入力枠を作成</button></div>
-
     <div id="formArea"></div>
-
     <div class="button-row">
-
       <button type="button" id="addSwimmer" style="display:none;">＋選手追加</button>
-
-      <button type="submit" id="submitData" style="display:none;">送信</button>
-
+      <button type="submit" id="submitData" style="display:none;">送信（ドライブ保存＆swim-web反映）</button>
     </div>
-
     <input type="hidden" name="data" id="dataField">
-
   </form>
 
-
-
   <script>
-
     // ==========================================
-
     // ⚠️【必須】swim-web用の共通GAS URLをここに貼ってください
-
     // ==========================================
-
     const UNIFIED_GAS_URL = "https://script.google.com/macros/s/AKfycbxfJ3r-5nsU92zc3GNqw8iBE7FjcUB8hkD-E2d2K4H-jw2aI8DGEUScsluo841dM73uBA/exec";
-
     
-
     const OPTIONS_GAS_URL = "https://script.google.com/macros/s/AKfycbwWDHsEwRXEvSesXZuF-VDz6OgD022p9dg2yXpKvWJjs8YkmqV2KlRoBSzzphI4g7MvZw/exec";
 
-
-
     const formArea = document.getElementById("formArea");
-
     let nameOptions = []; let lapPoints = [];
 
-
-
     window.onload = async () => {
-
       try {
-
         const res = await fetch(OPTIONS_GAS_URL);
-
         const data = await res.json();
-
         nameOptions = data.nameOptions;
-
         const eventOptions = data.eventName;
-
         document.getElementById("eventName").innerHTML = eventOptions.map(e => `<option value="${e.id}">${e.value}</option>`).join('');
-
       } catch (err) { console.error("初期データ取得失敗", err); }
-
     };
 
-
-
     document.getElementById("setupRace").addEventListener("click", () => {
-
       const distance = parseInt(document.getElementById("distance").value, 10);
-
       lapPoints = Array.from({ length: Math.floor(distance / 25) + 1 }, (_, i) => i * 25);
-
       formArea.innerHTML = ""; addSwimmerBlock();
-
       document.getElementById("addSwimmer").style.display = "inline-block";
-
       document.getElementById("submitData").style.display = "inline-block";
-
     });
-
-
 
     document.getElementById("addSwimmer").addEventListener("click", addSwimmerBlock);
 
-
-
     function addSwimmerBlock() {
-
       const div = document.createElement("div"); div.className = "swimmer-block";
-
       const selectedStyle = document.getElementById("style").value; let nameInputs = "";
-
       if (selectedStyle === "6" || selectedStyle === "7") {
-
         nameInputs += `<label style="color:#0066cc;">リレーメンバー:</label>`;
-
         for (let i = 0; i < 4; i++) { nameInputs += `<label>メンバー${i + 1}:<select class="name">${nameOptions.map(n => `<option value="${n.id}">${n.value}</option>`).join('')}</select></label>`; }
-
       } else { nameInputs = `<label>名前:<select class="name">${nameOptions.map(n => `<option value="${n.id}">${n.value}</option>`).join('')}</select></label>`; }
 
-
-
       const lapFields = lapPoints.map((lap, i) => {
-
         const label = i === 0 ? "リアクションタイム" : `${lap}m`; const className = i === 0 ? "reaction" : "lap";
-
         return `<div class="lap-input-group"><label>${label}<input type="text" inputmode="numeric" pattern="[0-9]*" class="${className}" data-distance="${lap}" placeholder="数値のみ（例: 10523）"></label><span class="formatted-time"></span></div>`;
-
       }).join('');
-
       
-
       const remarks = `<label>備考：<input type="text" class="remarks"></label>`;
-
       const deleteButton = `<button type="button" class="deleteSwimmer">削除</button>`;
-
       div.innerHTML = nameInputs + lapFields + remarks + deleteButton;
-
       formArea.appendChild(div);
-
       div.querySelector(".deleteSwimmer").addEventListener("click", () => { div.remove(); });
-
       attachTimeFormatListeners(div);
-
     }
-
-
 
     function formatTime(raw) {
-
       if (!/^[0-9]{1,5}$/.test(raw)) return "";
-
       const num = raw.padStart(5, "0");
-
       const minutes = num.length === 5 ? parseInt(num.slice(0, num.length - 4), 10) : 0;
-
       const seconds = parseInt(num.slice(-4, -2), 10); const hundredths = num.slice(-2);
-
       return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, "0")}.${hundredths}` : `${seconds}.${hundredths}`;
-
     }
-
-
 
     function timeToSeconds(formatted) {
-
       if (!formatted) return 0;
-
       const parts = formatted.split(':');
-
       if (parts.length === 2) return (parseInt(parts[0], 10) * 60) + parseFloat(parts[1]);
-
       return parseFloat(formatted);
-
     }
-
-
 
     function attachTimeFormatListeners(scope) {
-
       const inputs = scope.querySelectorAll(".reaction, .lap");
-
       inputs.forEach(input => {
-
         input.addEventListener("input", () => {
-
           const raw = input.value.trim(); const span = input.closest(".lap-input-group").querySelector(".formatted-time");
-
           if (span) span.textContent = formatTime(raw);
-
         });
-
       });
-
     }
 
+    // --- 同期処理の強化版（確実に完了を待ってから遷移する） ---
+    async function prepareAndSubmit(e) {
+      e.preventDefault(); // 一旦ページ遷移を完全に止める
 
+      const btn = document.getElementById("submitData");
+      btn.innerText = "同期処理中... (画面を閉じないでください)";
+      btn.disabled = true;
 
-    // ==============================================================
-
-    // ★ユーザー様の一番最初のオリジナルコードに完全復旧しました★
-
-    // ==============================================================
-
-    function prepareAndSubmit() {
-
-      // 元のままの処理（これで確実にドライブに正しいフォルダが作られます）
-
+      // 1. 元のドライブ保存用のデータを作成
       const eventName = parseInt(document.getElementById("eventName").value);
-
       const courseType = parseInt(document.getElementById("courseType").value);
-
       const gender = parseInt(document.getElementById("gender").value);
-
       const style = parseInt(document.getElementById("style").value);
-
       const distance = parseInt(document.getElementById("distance").value);
 
-
-
       const swimmers = Array.from(document.getElementsByClassName("swimmer-block")).map(block => {
-
         const nameElements = block.querySelectorAll(".name");
-
         const names = Array.from(nameElements).map(sel => parseInt(sel.value));
-
         const reaction = block.querySelector(".reaction")?.value.trim() || "";
-
         const lapInputs = block.querySelectorAll(".lap");
-
         const laps = {};
-
-        lapInputs.forEach(input => {
-
-          laps[input.dataset.distance] = input.value.trim();
-
-        });
-
+        lapInputs.forEach(input => { laps[input.dataset.distance] = input.value.trim(); });
         const remarks = block.querySelector(".remarks")?.value.trim() || "";
-
         return { names, reaction, laps, remarks };
-
       });
 
-
-
       const payload = { eventName, courseType, gender, style, distance, swimmers };
-
       document.getElementById("dataField").value = JSON.stringify(payload);
 
-
-
-      // swim-webへの裏側送信をキック（元の送信処理を一切止めない）
-
-      syncToSwimWebBackground();
-
-
-
-      return true; // 画面遷移して元のドライブ保存が100%動きます
-
-    }
-
-
-
-    // ==============================================================
-
-    // swim-web同期用（ブラウザの裏側でこっそり処理させます）
-
-    // ==============================================================
-
-    function syncToSwimWebBackground() {
-
-      if (!UNIFIED_GAS_URL || UNIFIED_GAS_URL === "ここにURLを貼り付けてください") return;
-
-
-
+      // 2. swim-web用データベースへの送信処理
       const getText = (id) => { const sel = document.getElementById(id); return sel.options[sel.selectedIndex].text; };
-
       const compName = getText("eventName");
-
       const styleName = getText("style");
-
       const distanceVal = document.getElementById("distance").value;
-
       const eventFull = `${distanceVal}m ${styleName}`;
-
       
-
       const swimmerBlocks = document.getElementsByClassName("swimmer-block");
+      let allSuccess = true;
 
+      if (UNIFIED_GAS_URL && UNIFIED_GAS_URL !== "ここにURLを貼り付けてください") {
+        for (let block of swimmerBlocks) {
+          const nameSelects = block.querySelectorAll(".name");
+          let athleteName = nameSelects.length > 1 ? Array.from(nameSelects).map(sel => sel.options[sel.selectedIndex].text).join(" / ") : nameSelects[0].options[nameSelects[0].selectedIndex].text;
+          
+          const lapInputs = block.querySelectorAll(".lap");
+          let finalTimeStr = "--.--"; let passDataSeconds = [];
+          
+          lapInputs.forEach(input => {
+            const val = input.value.trim();
+            if (val) {
+              const formatted = formatTime(val);
+              finalTimeStr = formatted; 
+              passDataSeconds.push(timeToSeconds(formatted));
+            }
+          });
 
+          const webPayload = {
+            action: 'saveRecord',
+            data: {
+              athlete: athleteName, event: eventFull, comp: compName, time: finalTimeStr,
+              strokes: 0, videoUrl: "", rawData: { passData: passDataSeconds, tempoData: [], avgTempo: "--", strokeRate: "--" }
+            }
+          };
 
-      for (let block of swimmerBlocks) {
-
-        const nameSelects = block.querySelectorAll(".name");
-
-        let athleteName = nameSelects.length > 1 ? Array.from(nameSelects).map(sel => sel.options[sel.selectedIndex].text).join(" / ") : nameSelects[0].options[nameSelects[0].selectedIndex].text;
-
-        
-
-        const lapInputs = block.querySelectorAll(".lap");
-
-        let finalTimeStr = "--.--"; let passDataSeconds = [];
-
-        
-
-        lapInputs.forEach(input => {
-
-          const val = input.value.trim();
-
-          if (val) {
-
-            const formatted = formatTime(val);
-
-            finalTimeStr = formatted; 
-
-            passDataSeconds.push(timeToSeconds(formatted));
-
+          try {
+            // 確実に応答が返ってくるまで待機する
+            const response = await fetch(UNIFIED_GAS_URL, { method: 'POST', body: JSON.stringify(webPayload) });
+            const result = await response.json();
+            if (result.status !== "success") {
+                console.error("エラーレスポンス:", result.message);
+                allSuccess = false;
+            }
+          } catch (err) {
+            console.error("fetchエラー:", err);
+            allSuccess = false;
           }
-
-        });
-
-
-
-        const webPayload = {
-
-          action: 'saveRecord',
-
-          data: {
-
-            athlete: athleteName, event: eventFull, comp: compName, time: finalTimeStr,
-
-            strokes: 0, videoUrl: "", rawData: { passData: passDataSeconds, tempoData: [], avgTempo: "--", strokeRate: "--" }
-
-          }
-
-        };
-
-
-
-        // keepalive: true を使うことで、画面がドライブ保存画面に切り替わっても裏側で確実にデータが届きます
-
-        fetch(UNIFIED_GAS_URL, {
-
-          method: 'POST',
-
-          body: JSON.stringify(webPayload),
-
-          keepalive: true
-
-        }).catch(err => console.error("同期エラー:", err));
-
+        }
+      } else {
+        alert("⚠️ swim-web用のGAS URLが設定されていないため、個人ドライブのみに保存します。");
       }
 
+      // エラーがあった場合はアラートを出す
+      if (!allSuccess) {
+          alert("一部のデータがswim-webに正常に同期されませんでした。\nURL設定や通信環境を確認してください。");
+      }
+
+      // 3. 通信が完了したら、本来の画面遷移（ドライブ保存）を実行する
+      setTimeout(() => {
+        document.getElementById("lapForm").submit();
+      }, 500); // 念のため0.5秒の猶予を持たせる
     }
-
   </script>
-
 </body>
-
 </html>
