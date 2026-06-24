@@ -46,7 +46,7 @@
     // ==========================================
     const UNIFIED_GAS_URL = "https://script.google.com/macros/s/AKfycbxfJ3r-5nsU92zc3GNqw8iBE7FjcUB8hkD-E2d2K4H-jw2aI8DGEUScsluo841dM73uBA/exec";
     
-    const OPTIONS_GAS_URL = "https://script.google.com/macros/s/AKfycbxj5svUmdB8EocDzZZnZGbi8izvjWQSk5Nh-K76y_ikmnWxOlCjv-S7gJaRfOgzpenXCA/exec";
+    const OPTIONS_GAS_URL = "https://script.google.com/macros/s/AKfycbw0mdLCxVoYZzjvLa6QD-PWgn85dJ3zA4Y7lutDthViA_P5Mye_7UNFDDmiBV63ZjlJcw/exec";
 
     const formArea = document.getElementById("formArea");
     let nameOptions = []; let lapPoints = [];
@@ -117,11 +117,7 @@
       });
     }
 
-    // ==============================================================
-    // ★ユーザー様の一番最初のオリジナルコードに完全復旧しました★
-    // ==============================================================
     function prepareAndSubmit() {
-      // 元のままの処理（これで確実にドライブに正しいフォルダが作られます）
       const eventName = parseInt(document.getElementById("eventName").value);
       const courseType = parseInt(document.getElementById("courseType").value);
       const gender = parseInt(document.getElementById("gender").value);
@@ -144,14 +140,13 @@
       const payload = { eventName, courseType, gender, style, distance, swimmers };
       document.getElementById("dataField").value = JSON.stringify(payload);
 
-      // swim-webへの裏側送信をキック（元の送信処理を一切止めない）
       syncToSwimWebBackground();
 
-      return true; // 画面遷移して元のドライブ保存が100%動きます
+      return true; 
     }
 
     // ==============================================================
-    // swim-web同期用（ブラウザの裏側でこっそり処理させます）
+    // swim-web同期用（修正版：RTも確実に送信する）
     // ==============================================================
     function syncToSwimWebBackground() {
       if (!UNIFIED_GAS_URL || UNIFIED_GAS_URL === "ここにURLを貼り付けてください") return;
@@ -168,14 +163,26 @@
         const nameSelects = block.querySelectorAll(".name");
         let athleteName = nameSelects.length > 1 ? Array.from(nameSelects).map(sel => sel.options[sel.selectedIndex].text).join(" / ") : nameSelects[0].options[nameSelects[0].selectedIndex].text;
         
-        const lapInputs = block.querySelectorAll(".lap");
-        let finalTimeStr = "--.--"; let passDataSeconds = [];
+        let finalTimeStr = "--.--"; 
+        let passDataSeconds = [];
         
+        // ★ 修正箇所: リアクションタイムを取得して配列の先頭に追加
+        const reactionInput = block.querySelector(".reaction");
+        if (reactionInput) {
+          const rtVal = reactionInput.value.trim();
+          if (rtVal) {
+            const rtFormatted = formatTime(rtVal);
+            passDataSeconds.push(timeToSeconds(rtFormatted));
+          }
+        }
+
+        // ラップタイムを取得して配列に追加
+        const lapInputs = block.querySelectorAll(".lap");
         lapInputs.forEach(input => {
           const val = input.value.trim();
           if (val) {
             const formatted = formatTime(val);
-            finalTimeStr = formatted; 
+            finalTimeStr = formatted; // 最終的に一番最後に入力されたタイムが全体の記録になります
             passDataSeconds.push(timeToSeconds(formatted));
           }
         });
@@ -188,7 +195,6 @@
           }
         };
 
-        // keepalive: true を使うことで、画面がドライブ保存画面に切り替わっても裏側で確実にデータが届きます
         fetch(UNIFIED_GAS_URL, {
           method: 'POST',
           body: JSON.stringify(webPayload),
