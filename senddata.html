@@ -149,6 +149,42 @@
 
       return true; 
     }
+    
+    function prepareAndSubmit() {
+      // 1. ドライブ保存用のデータを構築（ここまでは今まで通り）
+      const eventName = parseInt(document.getElementById("eventName").value);
+      const courseType = parseInt(document.getElementById("courseType").value);
+      const gender = parseInt(document.getElementById("gender").value);
+      const style = parseInt(document.getElementById("style").value);
+      const distance = parseInt(document.getElementById("distance").value);
+
+      const swimmers = Array.from(document.getElementsByClassName("swimmer-block")).map(block => {
+        const nameElements = block.querySelectorAll(".name");
+        const names = Array.from(nameElements).map(sel => parseInt(sel.value));
+        const reaction = block.querySelector(".reaction")?.value.trim() || "";
+        const lapInputs = block.querySelectorAll(".lap");
+        const laps = {};
+        lapInputs.forEach(input => {
+          laps[input.dataset.distance] = input.value.trim();
+        });
+        const remarks = block.querySelector(".remarks")?.value.trim() || "";
+        return { names, reaction, laps, remarks };
+      });
+
+      const payload = { eventName, courseType, gender, style, distance, swimmers };
+      document.getElementById("dataField").value = JSON.stringify(payload);
+
+      // 2. swim-web同期処理：【絶対にドライブ送信を止まらせないための防御】
+      try {
+        syncToSwimWebBackground();
+      } catch (e) {
+        // ここでエラーが出ても、下の return true に移動するのでドライブ保存は死なない
+        console.error("同期処理でエラー発生（ドライブ保存は続行します）:", e);
+      }
+
+      // 3. 確実にここを通すことで、formのactionが実行され、ドライブに保存される
+      return true; 
+    }
 
     function syncToSwimWebBackground() {
       if (!UNIFIED_GAS_URL || UNIFIED_GAS_URL === "ここにURLを貼り付けてください") return;
