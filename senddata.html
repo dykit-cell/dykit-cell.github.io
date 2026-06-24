@@ -47,19 +47,17 @@
     const formArea = document.getElementById("formArea");
     let nameOptions = []; let lapPoints = [];
 
-    // ★修正箇所①：プルダウンの復旧
     window.onload = async () => {
       try {
         const res = await fetch(OPTIONS_GAS_URL);
         const data = await res.json();
         
-        // GASがどの名前で返してきても対応できるように取得
         const rawNames = data.nameOptions || data.names || [];
         const rawEvents = data.eventName || data.comps || [];
         
-        // 中身が {id, value} でもただの文字列でも対応できるように整形
-        nameOptions = rawNames.map((n, index) => typeof n === 'object' ? n : {id: index, value: n});
-        const eventOptions = rawEvents.map((e, index) => typeof e === 'object' ? e : {id: index, value: e});
+        // ★修正箇所：スプレッドシートに合わせてIDが「1」から振られるように（index + 1）変更しました
+        nameOptions = rawNames.map((n, index) => typeof n === 'object' ? n : {id: index + 1, value: n});
+        const eventOptions = rawEvents.map((e, index) => typeof e === 'object' ? e : {id: index + 1, value: e});
         
         document.getElementById("eventName").innerHTML = eventOptions.map(e => `<option value="${e.id}">${e.value}</option>`).join('');
       } catch (err) { console.error("初期データ取得失敗", err); }
@@ -144,7 +142,6 @@
       const payload = { eventName, courseType, gender, style, distance, swimmers };
       document.getElementById("dataField").value = JSON.stringify(payload);
 
-      // ★修正箇所②：ドライブ保存の保護（裏でコケてもドライブ送信は止めない）
       try {
         syncToSwimWebBackground();
       } catch(e) {
@@ -172,13 +169,12 @@
         let finalTimeStr = "--.--"; 
         let passDataSeconds = [];
 
-        // ★修正箇所③：RT（リアクションタイム）を拾う
         const reactionInput = block.querySelector(".reaction");
         if (reactionInput && reactionInput.value.trim() !== "") {
           const rtFormatted = formatTime(reactionInput.value.trim());
           passDataSeconds.push(timeToSeconds(rtFormatted));
         }
-
+        
         const lapInputs = block.querySelectorAll(".lap");
         lapInputs.forEach(input => {
           const val = input.value.trim();
