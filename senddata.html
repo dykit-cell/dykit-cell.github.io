@@ -46,23 +46,17 @@
     // ==========================================
     const UNIFIED_GAS_URL = "https://script.google.com/macros/s/AKfycbxfJ3r-5nsU92zc3GNqw8iBE7FjcUB8hkD-E2d2K4H-jw2aI8DGEUScsluo841dM73uBA/exec";
     
-    const OPTIONS_GAS_URL = "https://script.google.com/macros/s/AKfycbw0mdLCxVoYZzjvLa6QD-PWgn85dJ3zA4Y7lutDthViA_P5Mye_7UNFDDmiBV63ZjlJcw/exec";
+    const OPTIONS_GAS_URL = "https://script.google.com/macros/s/AKfycbwBp3rRsHD1R3u9fYdfrRUKVlQeTJuPhyj0pCVbZGrrjoyNvd2vQEoXgM9j_-fQUUD6nw/exec";
 
     const formArea = document.getElementById("formArea");
     let nameOptions = []; let lapPoints = [];
 
-    // ① プルダウン復旧：GASがどんな配列の形を返してきてもエラーにさせない補強
     window.onload = async () => {
       try {
         const res = await fetch(OPTIONS_GAS_URL);
         const data = await res.json();
-        
-        const rawNames = data.nameOptions || data.names || [];
-        const rawEvents = data.eventName || data.comps || [];
-        
-        nameOptions = rawNames.map(n => typeof n === 'object' ? n : {id: n, value: n});
-        const eventOptions = rawEvents.map(e => typeof e === 'object' ? e : {id: e, value: e});
-        
+        nameOptions = data.nameOptions;
+        const eventOptions = data.eventName;
         document.getElementById("eventName").innerHTML = eventOptions.map(e => `<option value="${e.id}">${e.value}</option>`).join('');
       } catch (err) { console.error("初期データ取得失敗", err); }
     };
@@ -146,14 +140,14 @@
       const payload = { eventName, courseType, gender, style, distance, swimmers };
       document.getElementById("dataField").value = JSON.stringify(payload);
 
-      // ② ドライブ送信保護：裏側のエラーでドライブへの記録を絶対に止めない
+      // ★追加点①：ドライブ送信を絶対に邪魔させないためのエラープロテクト
       try {
         syncToSwimWebBackground();
-      } catch (e) {
-        console.error("同期処理エラー", e);
+      } catch(e) {
+        console.error("Web同期エラー（ドライブ保存は続行します）", e);
       }
 
-      return true;
+      return true; 
     }
 
     function syncToSwimWebBackground() {
@@ -174,7 +168,7 @@
         let finalTimeStr = "--.--"; 
         let passDataSeconds = [];
 
-        // ③ RT取得の修正：リアクションタイムを拾って配列の先頭に入れる
+        // ★追加点②：RT（リアクションタイム）を拾って配列の一番最初に入れる
         const reactionInput = block.querySelector(".reaction");
         if (reactionInput && reactionInput.value.trim() !== "") {
           const rtFormatted = formatTime(reactionInput.value.trim());
@@ -203,7 +197,7 @@
           method: 'POST',
           body: JSON.stringify(webPayload),
           keepalive: true
-        }).catch(err => console.error("同期エラー:", err));
+        }).catch(err => console.error("同期通信エラー:", err));
       }
     }
   </script>
